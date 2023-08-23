@@ -1,0 +1,349 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Create a VPC with 3 tier subnets using AWS CloudFormation"
+
+Resources:
+  ######################################## VPC ########################################
+
+  # VPC 1
+  VPC1:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: "Name"
+          Value: "VPC-1"
+        - Key: "Region"
+          Value: "Ireland"
+        - Key: "env"
+          Value: "testing"
+
+  # public subnet 1
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC1
+      CidrBlock: 10.0.0.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: "eu-west-1a"
+      Tags:
+        - Key: "Name"
+          Value: "PublicSubnet-1"
+        - Key: "Region"
+          Value: "Ireland"
+        - Key: "env"
+          Value: "testing"
+        - Key: "tier"
+          Value: "1"
+
+  # private subnet 1
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC1
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: "eu-west-1a"
+      Tags:
+        - Key: "Name"
+          Value: "PrivateSubnet-1"
+        - Key: "Region"
+          Value: "Ireland"
+        - Key: "env"
+          Value: "testing"
+        - Key: "tier"
+          Value: "2"
+
+  # private subnet 2
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC1
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: "eu-west-1a"
+      Tags:
+        - Key: "Name"
+          Value: "PrivateSubnet-2"
+        - Key: "Region"
+          Value: "Ireland"
+        - Key: "env"
+          Value: "testing"
+        - Key: "tier"
+          Value: "3"
+
+  # internet gateway
+  InternetGateway1:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: "Name"
+          Value: "InternetGateway-1"
+        - Key: "Region"
+          Value: "Ireland"
+        - Key: "env"
+          Value: "testing"
+
+  # VPC and Internet Gateway attachment
+  VPC1GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC1
+      InternetGatewayId: !Ref InternetGateway1
+
+  # Route Table 1 for public subnet 1 (MAIN = NO)
+  RouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC1
+      Tags:
+        - Key: "Name"
+          Value: "RouteTable-1"
+        - Key: "Region"
+          Value: "Ireland"
+        - Key: "env"
+          Value: "testing"
+        - Key: "tier"
+          Value: "1"
+
+  # Route Table 2 for private subnet 2(MAIN = NO)
+  RouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC1
+      Tags:
+        - Key: "Name"
+          Value: "RouteTable-2"
+        - Key: "Region"
+          Value: "Ireland"
+        - Key: "env"
+          Value: "testing"
+        - Key: "tier"
+          Value: "2"
+
+  # Route Table 3 for private subnet 2 (MAIN = NO)
+  RouteTable3:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC1
+      Tags:
+        - Key: "Name"
+          Value: "RouteTable-3"
+        - Key: "Region"
+          Value: "Ireland"
+        - Key: "env"
+          Value: "testing"
+        - Key: "tier"
+          Value: "3"
+
+  # public subnet 1 <-> RTB 1
+  PublicSubnet1RTB1Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref RouteTable1
+
+  # private subnet 1 <-> RTB 2
+  PrivateSubnet1RTB2Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref RouteTable2
+
+  # private subnet 2 <-> RTB 3
+  PrivateSubnet2RTB3Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref RouteTable3
+
+  # elastic ip
+  NatGatewayElasticIP1:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: "vpc"
+      Tags:
+        - Key: "Name"
+          Value: "EIP-1"
+        - Key: "Region"
+          Value: "Ireland"
+        - Key: "env"
+          Value: "testing"
+
+  #NAT Gateway for private subnet 1
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayElasticIP1.AllocationId
+      ConnectivityType: "public"
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: "Name"
+          Value: "NatGateway-1"
+        - Key: "Region"
+          Value: "Ireland"
+        - Key: "env"
+          Value: "testing"
+
+  # internet gateway route in RTB 1
+  IGWRouteInRTB1:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      RouteTableId: !Ref RouteTable1
+      GatewayId: !Ref InternetGateway1
+
+  # NAT gateway route in RTB 2
+  NatGWRouteInRTB2:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      RouteTableId: !Ref RouteTable2
+      GatewayId: !Ref NatGateway1
+
+  ######################################## VPC ########################################
+
+  # keypair for all EC2
+  LabEC2KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: "Lab-EC2-key"
+      Tags:
+        - Key: "env"
+          Value: "testing"
+
+  # Security Group 1 for EC2 1
+  EC2SecurityGroup1:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "To allow SSH and IPv4 ICMP"
+      GroupName: "Tier 1 EC2 security group"
+      # Outbound Rule
+      SecurityGroupEgress:
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "-1"
+      # Inbound Rule
+      SecurityGroupIngress:
+        # SSh
+        - IpProtocol: "tcp"
+          CidrIp: "0.0.0.0/0"
+          FromPort: 22
+          ToPort: 22
+        # ICMP IP44
+        - IpProtocol: "icmp"
+          CidrIp: "0.0.0.0/0"
+          FromPort: -1
+          ToPort: -1
+      Tags:
+        - Key: "env"
+          Value: "testing"
+      VpcId: !Ref VPC1
+
+  # EC2 1 in public subnet 1
+  EC2Instance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      KeyName: !Ref LabEC2KeyPair
+      ImageId: "ami-01dd271720c1ba44f" #Ubuntu Server 20.04 LTS (64-bit (x86))
+      AvailabilityZone: "eu-west-1a"
+      InstanceType: "t2.micro"
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup1
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: "Name"
+          Value: "EC2 Instance 1"
+        - Key: "env"
+          Value: "testing"
+    DependsOn: VPC1
+
+  # Security Group 2 for EC2 2
+  EC2SecurityGroup2:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "To allow SSH and IPv4 ICMP"
+      GroupName: "Tier 2 EC2 security group"
+      # Outbound Rule
+      SecurityGroupEgress:
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "-1"
+      # Inbound Rule
+      SecurityGroupIngress:
+        # SSh
+        - IpProtocol: "tcp"
+          CidrIp: "0.0.0.0/0"
+          FromPort: 22
+          ToPort: 22
+        # ICMP IP44
+        - IpProtocol: "icmp"
+          CidrIp: "0.0.0.0/0"
+          FromPort: -1
+          ToPort: -1
+      Tags:
+        - Key: "env"
+          Value: "testing"
+      VpcId: !Ref VPC1
+
+  # EC2 2 in private subnet 1
+  EC2Instance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      KeyName: !Ref LabEC2KeyPair
+      ImageId: "ami-01dd271720c1ba44f" #Ubuntu Server 20.04 LTS (64-bit (x86))
+      AvailabilityZone: "eu-west-1a"
+      InstanceType: "t2.micro"
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup2
+      SubnetId: !Ref PrivateSubnet1
+      Tags:
+        - Key: "Name"
+          Value: "EC2 Instance 2"
+        - Key: "env"
+          Value: "testing"
+    DependsOn: VPC1
+
+  # Security Group 3 for EC2 2
+  EC2SecurityGroup3:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "To allow SSH and IPv4 ICMP"
+      GroupName: "Tier 3 EC2 security group"
+      # Outbound Rule
+      SecurityGroupEgress:
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "-1"
+      # Inbound Rule
+      SecurityGroupIngress:
+        # SSh
+        - IpProtocol: "tcp"
+          CidrIp: "0.0.0.0/0"
+          FromPort: 22
+          ToPort: 22
+        # ICMP IP44
+        - IpProtocol: "icmp"
+          CidrIp: "0.0.0.0/0"
+          FromPort: -1
+          ToPort: -1
+      Tags:
+        - Key: "env"
+          Value: "testing"
+      VpcId: !Ref VPC1
+
+  # EC2 2 in private subnet 2
+  EC2Instance3:
+    Type: AWS::EC2::Instance
+    Properties:
+      KeyName: !Ref LabEC2KeyPair
+      ImageId: "ami-0df7a207adb9748c7" #Ubuntu Server 20.04 LTS (64-bit (x86))
+      AvailabilityZone: "ap-southeast-1a"
+      InstanceType: "t2.micro"
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup3
+      SubnetId: !Ref PrivateSubnet2
+      Tags:
+        - Key: "Name"
+          Value: "EC2 Instance 3"
+        - Key: "env"
+          Value: "testing"
+    DependsOn: VPC1
